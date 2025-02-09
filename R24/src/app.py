@@ -1,17 +1,16 @@
 ﻿import customtkinter as ctk
 from customtkinter import CTkTabview
-from simulation import run_simulation
+from simulation import run_simulation_first_method, run_simulation_second_method, TrendAnalyzer
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-
 
 class App:
     def __init__(self):
         self.setup_ui()
         self.setup_tabs()
         self.setup_default_values()
-        self.setup_simulation_tab()
-        self.setup_settings_tab()
+        self.setup_first_simulation_tab()
+        self.setup_second_simulation_tab()
         self.setup_about_tab()
 
     def setup_ui(self):
@@ -21,7 +20,7 @@ class App:
 
         self.root = ctk.CTk()
         self.root.title("Моделирование реле")
-        self.root.geometry("10%40%")
+        self.root.geometry("100%100%")  # Увеличим ширину окна для текстового поля
         self.root.resizable(False, False)
 
     def setup_tabs(self):
@@ -29,13 +28,13 @@ class App:
         self.tabview = CTkTabview(self.root)
         self.tabview.pack(padx=10, pady=10, fill="both", expand=True)
 
-        self.tabview.add("Симуляция")
-        self.tabview.add("Настройки")
+        self.tabview.add("Первая симуляция")
+        self.tabview.add("Вторая симуляция")
         self.tabview.add("О программе")
 
     def setup_default_values(self):
         """Установка значений по умолчанию для параметров."""
-        self.default_values = {
+        self.default_values_first = {
             "U": (50, "В"),
             "R": (5000, "Ом"),
             "W": (11500, ""),
@@ -48,19 +47,39 @@ class App:
             "dt": (1e-3, "с"),
         }
 
-    def setup_simulation_tab(self):
-        """Настройка вкладки 'Симуляция'."""
-        self.create_parameter_entries(self.tabview.tab("Симуляция"))
-        self.create_plot_selection(self.tabview.tab("Симуляция"))
-        self.create_simulation_button(self.tabview.tab("Симуляция"))
+        self.default_values_second = {
+            "U": (50, "В"),
+            "R": (5000, "Ом"),
+            "W": (11500, ""),
+            "D": (0.03, "м"),
+            "δ0": (1.0e-3, "м"),
+            "δk": (0.5e-3, "м"),
+            "m": (2e-3, "кг"),
+            "Fнач": (4, "Н"),
+            "M": (4e3, "Н·м"),
+            "dt": (1e-3, "с"),
+            "R1": (1000, "Ом"),
+            "C": (0.019558982, "Ф"),
+            "ΔU": (10, "В"),
+        }
 
-    def create_parameter_entries(self, parent):
+    def setup_first_simulation_tab(self):
+        """Настройка вкладки 'Первая симуляция'."""
+        self.create_parameter_entries(self.tabview.tab("Первая симуляция"), self.default_values_first)
+        self.create_simulation_button(self.tabview.tab("Первая симуляция"), "Запустить первую симуляцию", self.start_first_simulation)
+
+    def setup_second_simulation_tab(self):
+        """Настройка вкладки 'Вторая симуляция'."""
+        self.create_parameter_entries(self.tabview.tab("Вторая симуляция"), self.default_values_second)
+        self.create_simulation_button(self.tabview.tab("Вторая симуляция"), "Запустить вторую симуляцию", self.start_second_simulation)
+
+    def create_parameter_entries(self, parent, default_values):
         """Создание полей ввода для параметров."""
         self.params_frame = ctk.CTkFrame(parent)
         self.params_frame.pack(padx=10, pady=10, fill="x")
 
         self.entries = {}
-        for param, (value, unit) in self.default_values.items():
+        for param, (value, unit) in default_values.items():
             self.create_parameter_row(param, value, unit)
 
     def create_parameter_row(self, param, value, unit):
@@ -79,72 +98,34 @@ class App:
         unit_label = ctk.CTkLabel(row_frame, text=unit)
         unit_label.pack(side="left", padx=5)
 
-    def create_plot_selection(self, parent):
-        """Создание раскрывающегося фрейма для выбора графиков."""
-        self.plot_selection_frame = ctk.CTkFrame(parent)
-        self.plot_selection_frame.pack(padx=10, pady=10, fill="x")
-
-        self.plot_selection_button = ctk.CTkButton(
-            self.plot_selection_frame,
-            text="Выбор графиков",
-            command=self.toggle_plot_selection,
-        )
-        self.plot_selection_button.pack(fill="x")
-
-        self.plot_selection_inner_frame = ctk.CTkFrame(self.plot_selection_frame)
-        self.plot_selection_inner_frame.pack(fill="x", padx=5, pady=5)
-        self.plot_selection_visible = False
-
-        self.checkboxes = {
-            "current": ctk.CTkCheckBox(self.plot_selection_inner_frame, text="Ток (i(t))"),
-            "tau": ctk.CTkCheckBox(self.plot_selection_inner_frame, text="τ(t)"),
-            "Fe": ctk.CTkCheckBox(self.plot_selection_inner_frame, text="Fэ(t)"),
-            "Fm": ctk.CTkCheckBox(self.plot_selection_inner_frame, text="Fм(t)"),
-            "delta": ctk.CTkCheckBox(self.plot_selection_inner_frame, text="δ(t)"),
-            "inductance": ctk.CTkCheckBox(self.plot_selection_inner_frame, text="L(t)"),
-        }
-
-        for checkbox in self.checkboxes.values():
-            checkbox.pack(pady=2)
-
-        self.plot_selection_inner_frame.pack_forget()
-
-    def create_simulation_button(self, parent):
+    def create_simulation_button(self, parent, text, command):
         """Создание кнопки запуска симуляции."""
-        self.button = ctk.CTkButton(parent, text="Запустить симуляцию", command=self.start_simulation)
-        self.button.pack(pady=10)
-
-    def setup_settings_tab(self):
-        """Настройка вкладки 'Настройки'."""
-        label = ctk.CTkLabel(self.tabview.tab("Настройки"), text="Здесь будут настройки")
-        label.pack(padx=10, pady=10)
+        button = ctk.CTkButton(parent, text=text, command=command)
+        button.pack(pady=10)
 
     def setup_about_tab(self):
         """Настройка вкладки 'О программе'."""
         label = ctk.CTkLabel(self.tabview.tab("О программе"), text="О программе: Моделирование реле")
         label.pack(padx=10, pady=10)
 
-    def toggle_plot_selection(self):
-        """Переключение видимости фрейма с выбором графиков."""
-        if self.plot_selection_visible:
-            self.plot_selection_inner_frame.pack_forget()
-            self.plot_selection_visible = False
-        else:
-            self.plot_selection_inner_frame.pack(fill="x", padx=5, pady=5)
-            self.plot_selection_visible = True
-
-    def start_simulation(self):
-        """Запуск симуляции и отображение результатов."""
+    def start_first_simulation(self):
+        """Запуск первой симуляции и отображение результатов."""
         params = {param: float(entry.get()) for param, entry in self.entries.items()}
-        self.show_simulation_results(params)
+        self.show_simulation_results(params, run_simulation_first_method)
 
-    def show_simulation_results(self, params):
+    def start_second_simulation(self):
+        """Запуск второй симуляции и отображение результатов."""
+        params = {param: float(entry.get()) for param, entry in self.entries.items()}
+        self.show_simulation_results(params, run_simulation_second_method)
+
+    def show_simulation_results(self, params, simulation_function):
         """Отображение результатов симуляции в новом окне."""
         self.graph_window = ctk.CTkToplevel(self.root)
         self.graph_window.title("Результаты симуляции")
-        self.graph_window.geometry("800x600")
+        self.graph_window.geometry("100%x100%")  # Увеличим ширину окна для текстового поля
+        self.graph_window.resizable(False, False)
 
-        results = run_simulation(params)
+        results = simulation_function(params)
         self.plot_results(results)
 
     def plot_results(self, results):
@@ -154,50 +135,39 @@ class App:
         text_color = 'white'
         grid_color = '#555555'
 
-        selected_plots = [key for key, checkbox in self.checkboxes.items() if checkbox.get() == 1]
-        num_plots = len(selected_plots)
-
-        if num_plots == 0:
-            return
-
-        rows = (num_plots + 1) // 2
-        cols = 2 if num_plots > 1 else 1
-        fig, axes = plt.subplots(rows, cols, figsize=(12, 6 * rows / 2))
+        fig, ax = plt.subplots(figsize=(8, 6))  # Уменьшим размер графика
         fig.suptitle('Результаты симуляции', fontsize=16, color=text_color)
         fig.patch.set_facecolor(background_color)
 
-        if num_plots == 1:
-            axes = [axes]
-        elif rows == 1:
-            axes = axes.reshape(1, -1)
-
-        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
-        plot_data = {
-            "current": ("Ток (i)", results["current"]),
-            "tau": ("τ", results["tau"]),
-            "Fe": ("Fэ", results["Fe"]),
-            "Fm": ("Fм", results["Fm"]),
-            "delta": ("δ", results["delta"]),
-            "inductance": ("L", results["inductance"]),
-        }
-
-        for i, key in enumerate(selected_plots):
-            ax = axes[i // cols][i % cols] if num_plots > 1 else axes[i]
-            title, data = plot_data[key]
-            ax.plot(results["time"], data, color=colors[i])
-            ax.set_xlabel('Время (t)', color=text_color)
-            ax.set_ylabel(title, color=text_color)
-            ax.set_title(f'Зависимость {title} от времени', color=text_color)
-            ax.grid(True, color=grid_color)
-            ax.set_facecolor(background_color)
+        ax.plot(results["time"], results["current"], color='#1f77b4')
+        ax.set_xlabel('Время (t)', color=text_color)
+        ax.set_ylabel('Ток (i)', color=text_color)
+        ax.set_title('Зависимость тока от времени', color=text_color)
+        ax.grid(True, color=grid_color)
+        ax.set_facecolor(background_color)
 
         plt.tight_layout()
 
-        canvas = FigureCanvasTkAgg(fig, master=self.graph_window)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=ctk.BOTH, expand=True)
+        # Создаем фрейм для графика и текстового поля
+        frame = ctk.CTkFrame(self.graph_window)
+        frame.pack(fill=ctk.BOTH, expand=True)
 
-        toolbar = NavigationToolbar2Tk(canvas, self.graph_window)
+        # Добавляем график
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(side="left", fill=ctk.BOTH, expand=True, padx=10, pady=10)
+
+        # Анализ тенденций
+        trend_analyzer = TrendAnalyzer(results["time"], results["current"])
+        trend_info = trend_analyzer.analyze_trends()
+
+        # Добавляем текстовое поле для информации о тенденциях
+        text_box = ctk.CTkTextbox(frame, width=400, wrap="word")  # Увеличим ширину текстового поля
+        text_box.insert("1.0", trend_info)
+        text_box.pack(side="right", fill="both", padx=10, pady=10)
+
+        # Добавляем панель инструментов для графика
+        toolbar = NavigationToolbar2Tk(canvas, frame)
         toolbar.update()
         toolbar_frame = toolbar.winfo_children()[0]
         toolbar_frame.configure(background="#202020")
@@ -205,7 +175,6 @@ class App:
     def run(self):
         """Запуск главного цикла приложения."""
         self.root.mainloop()
-
 
 if __name__ == "__main__":
     app = App()
