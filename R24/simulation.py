@@ -5,9 +5,8 @@ class ElectromagneticSystem:
     def __init__(self):
         pass
 
-    def calculate_first_method(self, U, R, L0, δ0, δk, Fнач, M, μ0, W, S, m, dt):
+    def calculate_first_method(self, U, R, L0, δ0, δk, Fнач, M, μ0, W, S, m, dt, tmax):
         t = 0.0
-        tmax = 0.3
         δ = δ0
         L = L0 / δ0
         s0 = (Fнач / M) + δ0
@@ -48,9 +47,8 @@ class ElectromagneticSystem:
             "current": current,
         }
 
-    def calculate_second_method(self, U, R, L0, δ0, δk, Fнач, M, μ0, W, S, m, dt, R1, C, ΔU):
+    def calculate_second_method(self, U, R, L0, δ0, δk, Fнач, M, μ0, W, S, m, dt, R1, C, ΔU, tmax):
         t = 0.0
-        tmax = 0.3
         δ = δ0
         L = L0 / δ0
         s0 = (Fнач / M) + δ0
@@ -121,6 +119,7 @@ def run_simulation_first_method(params):
         S=S,
         m=params["m"],
         dt=params["dt"],
+        tmax=params["tmax"],  # Добавлено tmax
     )
 
 def run_simulation_second_method(params):
@@ -146,6 +145,7 @@ def run_simulation_second_method(params):
         R1=params["R1"],
         C=params["C"],
         ΔU=params["ΔU"],
+        tmax=params["tmax"],  # Добавлено tmax
     )
 
 class TrendAnalyzer:
@@ -158,13 +158,7 @@ class TrendAnalyzer:
     def analyze_trends(self):
         """Анализ тенденций изменения графика."""
         trend_info = "Информация о тенденциях:\n\n"
-        events = []
-
-        for i in range(1, len(self.current_diff)):
-            if self.current_diff[i] > 0 and self.current_diff[i-1] <= 0:
-                events.append((self.time[i], "рост", self.current[i]))
-            elif self.current_diff[i] < 0 and self.current_diff[i-1] >= 0:
-                events.append((self.time[i], "падение", self.current[i]))
+        events = self.get_events()
 
         if not events:
             trend_info += "Нет значительных изменений тенденции.\n"
@@ -187,3 +181,13 @@ class TrendAnalyzer:
             trend_info += "\n"
 
         return trend_info
+
+    def get_events(self):
+        """Получение событий (рост/падение) для аннотаций."""
+        events = []
+        for i in range(1, len(self.current_diff)):
+            if self.current_diff[i] > 0 and self.current_diff[i-1] <= 0:
+                events.append((self.time[i], "рост", self.current[i]))
+            elif self.current_diff[i] < 0 and self.current_diff[i-1] >= 0:
+                events.append((self.time[i], "падение", self.current[i]))
+        return events

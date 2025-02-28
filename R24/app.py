@@ -43,6 +43,7 @@ class App:
             "Fнач": (4, "Н"),
             "M": (4e3, "Н·м"),
             "dt": (1e-3, "с"),
+            "tmax": (0.3, "с"),  # Добавлено tmax
         }
 
         self.default_values_second = {
@@ -59,6 +60,7 @@ class App:
             "R1": (1000, "Ом"),
             "C": (0.019558982, "Ф"),
             "ΔU": (10, "В"),
+            "tmax": (0.3, "с"),  # Добавлено tmax
         }
 
     def setup_first_simulation_tab(self):
@@ -111,9 +113,9 @@ class App:
 
     def show_simulation_results(self, params, simulation_function):
         results = simulation_function(params)
-        self.show_results_window(results)
+        self.show_results_window(results, params["tmax"])
 
-    def show_results_window(self, results):
+    def show_results_window(self, results, tmax):
         results_window = ctk.CTkToplevel(self.root)
         results_window.title("Результаты симуляции")
         results_window.geometry("1200x600")
@@ -129,6 +131,10 @@ class App:
         ax.set_title('Зависимость тока от времени')
         ax.grid(True)
 
+        # Добавление аннотаций
+        trend_analyzer = TrendAnalyzer(results["time"], results["current"])
+        events = trend_analyzer.get_events()
+
         canvas = FigureCanvasTkAgg(fig, master=graph_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
@@ -136,7 +142,6 @@ class App:
         trend_frame = ctk.CTkFrame(results_window)
         trend_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
-        trend_analyzer = TrendAnalyzer(results["time"], results["current"])
         trend_info = trend_analyzer.analyze_trends()
 
         text_box = ctk.CTkTextbox(trend_frame, wrap="word")
@@ -150,4 +155,3 @@ class App:
 if __name__ == "__main__":
     app = App()
     app.run()
-
